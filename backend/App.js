@@ -16,7 +16,7 @@ const app = express();
 // Middlewares
 app.use(
   cors({
-    origin: "http://localhost:5173", // front-end origin
+    origin: "https://hotel-order-ve5c.vercel.app", // front-end origin
     credentials: true,
   })
 );
