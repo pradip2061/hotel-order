@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+/* Mobile Toast Fix */
+@media (max-width: 768px) {
+  .Toastify__toast {
+    font-size: 14px;
+    padding: 10px;
+    margin: 0 auto;
+  }
+
+  .Toastify__toast-container {
+    width: 95vw !important;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
