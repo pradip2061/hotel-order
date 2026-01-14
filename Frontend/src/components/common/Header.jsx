@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { LogIn, LogOut, User, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
+import { unregisterPushToken } from "../../utils/pushNotification";
 
 export default function Header() {
   const navigate = useNavigate();
@@ -25,13 +26,16 @@ export default function Header() {
   const handleLogout = () => {
     setLogoutLoading(true);
     toast.success("Logout successfully!")
-    // simulate async logout (optional)
-    setTimeout(() => {
-      localStorage.clear();
-      setUser({ name: "", role: "" });
-      setLogoutLoading(false);
-      navigate("/");
-    }, 500);
+    // attempt to unregister push token, then clear
+    unregisterPushToken().finally(() => {
+      // simulate async logout (optional)
+      setTimeout(() => {
+        localStorage.clear();
+        setUser({ name: "", role: "" });
+        setLogoutLoading(false);
+        navigate("/");
+      }, 300);
+    });
   };
 
   return (

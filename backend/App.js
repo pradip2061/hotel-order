@@ -1,13 +1,15 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const http = require("http"); // Required for socket.io
-const { Server } = require("socket.io"); // Socket.io server
+const http = require("http");
+const { Server } = require("socket.io");
+require("dotenv").config();
+
 const Authrouter = require("./router/AuthRouterjs");
-const connectDB = require("./database");
 const orderRouter = require("./router/OrderRouter");
 const menuRouter = require("./router/MenuRouter");
-require("dotenv").config();
+const notificationRouter = require("./router/NotificationRouter");
+const connectDB = require("./database");
 
 connectDB();
 
@@ -16,7 +18,7 @@ const app = express();
 // Middlewares
 app.use(
   cors({
-    origin: "https://hotel-order-ve5c.vercel.app", // front-end origin
+    origin: "https://hotel-order-ve5c.vercel.app",
     credentials: true,
   })
 );
@@ -26,14 +28,13 @@ app.use(express.json());
 app.use("/chiyaguff/auth", Authrouter);
 app.use("/chiyaguff/order", orderRouter);
 app.use("/chiyaguff/menu", menuRouter);
-// Start server with Socket.IO
-const PORT = process.env.PORT || 5000;
-const server = app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT} with Socket.IO`);
-  console.log(`📡 Socket.IO ready to accept connections`);
-});
+app.use("/chiyaguff/notifications", notificationRouter);
 
-// Initialize Socket.IO
+// Start server
+const PORT = process.env.PORT || 5000;
+const server = http.createServer(app);
+
+// Socket.IO setup
 const io = new Server(server, {
   cors: {
     origin: "https://hotel-order-ve5c.vercel.app",
@@ -41,25 +42,39 @@ const io = new Server(server, {
   },
 });
 
-
+// Save io in app for later use
 app.set("io", io);
+
+// 🔥 ONLINE USERS MAP
+const onlineUsers = new Map(); // userId -> socketId
+app.set("onlineUsers", onlineUsers);
+
 // Handle socket connections
 io.on("connection", (socket) => {
-  console.log(`✅ User connected: ${socket.id}`);
-  console.log(`📊 Total connected clients: ${io.sockets.sockets.size}`);
+  console.log(`Socket connected: ${socket.id}`);
 
-   socket.on("joinRoom", (room) => {
-    socket.join(room); // room can be "chef", "waiter", etc.
-    console.log(`${socket.id} joined ${room}`);
+  socket.on("joinRoom", (userid) => {
+    if (!userid) return;
+    onlineUsers.set(userid, socket.id);
+    socket.userId = userid;
+
+    console.log(`User online: ${userid}`);
+    console.log(`Online users count: ${onlineUsers.size}`); // ✅ This is correct here
   });
 
   socket.on("disconnect", () => {
-    console.log(`❌ User disconnected: ${socket.id}`);
-    console.log(`📊 Total connected clients: ${io.sockets.sockets.size}`);
-  });
-
-  // Handle connection errors
-  socket.on("error", (error) => {
-    console.error(`Socket error for ${socket.id}:`, error);
+    if (socket.userId) {
+      onlineUsers.delete(socket.userId);
+      console.log(`User offline: ${socket.userId}`);
+      console.log(`Online users count: ${onlineUsers.size}`); // ✅ Also correct here
+    }
   });
 });
+
+
+// Start server
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📡 Socket.IO ready`);
+});
+

@@ -13,13 +13,24 @@ export default function ChefHome() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { orders, loading } = useSelector((state) => state.order);
-  const role = localStorage.getItem("role");
+  const userid = localStorage.getItem("userid");
 
   useEffect(() => {
     dispatch(fetchOrders());
   }, [dispatch]);
 
   useEffect(() => {
+    // Join rooms after socket connects
+    const joinRooms = () => {
+      socket.emit("joinRoom", userid); // personal room
+    };
+
+    if (!socket.connected) {
+      socket.on("connect", joinRooms);
+    } else {
+      joinRooms();
+    }
+
     socket.on("newOrder", (order) => {
       dispatch(updateNewOrder(order));
     });
@@ -30,7 +41,6 @@ export default function ChefHome() {
       });
       toast.success(message);
     });
-    socket.emit("joinRoom", role);
 
     socket.on("orderCancelled", (message) => {
       // Optionally update Redux

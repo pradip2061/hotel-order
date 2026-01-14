@@ -34,7 +34,6 @@ export default function OrderCard() {
       }else{
         toast.error(`Order marked as ${status}!`);
       }
-      dispatch(fetchOrders());
     } catch (err) {
       console.error(err);
       toast.error("Failed to update order");

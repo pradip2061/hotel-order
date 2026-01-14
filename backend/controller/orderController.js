@@ -1,13 +1,17 @@
 
 const Order = require("../model/orderModal");
+const userModel = require("../model/userModel");
+const sendNotification = require("../utils/sendNotification");
 
 // Create new order
 const createOrder = async (req, res) => {
   try {
     const io = req.app.get("io");
+    const onlineUsers = req.app.get("onlineUsers");
+
     const { tableNumber, items, customerMessage } = req.body;
 
-    // Validate input
+    // 1️⃣ Validate input
     if (
       !tableNumber ||
       !items ||
@@ -20,13 +24,17 @@ const createOrder = async (req, res) => {
       return res.status(400).json({ message: "Incomplete order data" });
     }
 
-    // Calculate total automatically if not sent
+    // 2️⃣ Calculate total
     const total = items.reduce(
-      (sum, i) => sum + i.price * i.quantity * (i.quantityType === "Half Plate" ? 0.5 : 1),
+      (sum, i) =>
+        sum +
+        i.price *
+          i.quantity *
+          (i.quantityType === "Half Plate" ? 0.5 : 1),
       0
     );
 
-    // Create order
+    // 3️⃣ Create order
     const order = await Order.create({
       tableNumber,
       items,
@@ -34,16 +42,74 @@ const createOrder = async (req, res) => {
       customerMessage: customerMessage || "",
     });
 
-    // Emit to all connected clients
-    io.emit("newOrder", order);
-    io.emit("notifications", `Order arrived from Table Number ${tableNumber}`);
+    // 4️⃣ Fetch users in parallel
+    const [chefsAndAccountants, waiters] = await Promise.all([
+      userModel.find({ role: { $in: ["Chef", "Accountant"] } }),
+      userModel.find({ role: "Waiter" }),
+    ]);
 
-    res.status(201).json({ message: "Order placed successfully", order });
+    const notifySocketIds = [];
+    const notifyOfflineUserIds = [];
+    const waiterSocketIds = [];
+
+    // 5️⃣ Separate online / offline
+    chefsAndAccountants.forEach((user) => {
+      const uid = user._id.toString();
+      if (onlineUsers.has(uid)) {
+        notifySocketIds.push(onlineUsers.get(uid));
+      } else {
+        notifyOfflineUserIds.push(uid);
+      }
+    });
+
+    waiters.forEach((user) => {
+      const uid = user._id.toString();
+      if (onlineUsers.has(uid)) {
+        waiterSocketIds.push(onlineUsers.get(uid));
+      }
+    });
+
+    // 6️⃣ Emit to WAITERS (silent)
+    waiterSocketIds.forEach((socketId) => {
+      io.to(socketId).emit("newOrder", order);
+    });
+
+    // 7️⃣ Emit to CHEF & ACCOUNTANT (with notification)
+    notifySocketIds.forEach((socketId) => {
+      io.to(socketId).emit("newOrder", order);
+      io.to(socketId).emit(
+        "notifications",
+        `Order arrived from Table ${tableNumber}`
+      );
+    });
+
+    // 8️⃣ Push notification (ONLY Chef & Accountant)
+    if (notifyOfflineUserIds.length > 0) {
+      await sendNotification({
+        userIds: notifyOfflineUserIds,
+        title: "New Order",
+        body: `Order arrived from Table ${tableNumber}`,
+        data: {
+          orderId: order._id.toString(),
+          type: "order",
+        },
+        io,
+      });
+    }
+
+    res.status(201).json({
+      message: "Order placed successfully",
+      order,
+    });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    res.status(500).json({
+      message: "Server error",
+      error: err.message,
+    });
   }
 };
+
 
 // Get all orders
 const getOrders = async (req, res) => {
@@ -59,50 +125,126 @@ const getOrders = async (req, res) => {
 const updateOrderStatus = async (req, res) => {
   try {
     const io = req.app.get("io");
+    const onlineUsers = req.app.get("onlineUsers");
+
     const { orderId } = req.params;
     const { status } = req.body;
 
-    // validate status
-    const allowedStatus = ["pending", "completed", "paid","cancelled"];
+    const allowedStatus = ["pending", "completed", "paid", "cancelled"];
     if (!allowedStatus.includes(status)) {
-      return res.status(400).json({
-        message: "Invalid status value",
-      });
+      return res.status(400).json({ message: "Invalid status value" });
     }
 
     const order = await Order.findByIdAndUpdate(
       orderId,
       { status },
-      { new: true } // return updated doc
+      { new: true }
     );
 
-
     if (!order) {
-      return res.status(404).json({
-        message: "Order not found",
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    const msg =
+      status === "completed"
+        ? `${order.tableNumber} Table order is ready!`
+        : status === "cancelled"
+        ? `${order.tableNumber} Table order is cancelled!`
+        : status === "paid"
+        ? `${order.tableNumber} Table order is paid!`
+        : "";
+
+    // Fetch users
+    const [waiters, accountants, chefs] = await Promise.all([
+      userModel.find({ role: "Waiter" }),
+      userModel.find({ role: "Accountant" }),
+      userModel.find({ role: "Chef" }),
+    ]);
+
+    /* =========================
+       ORDER READY (completed)
+       ========================= */
+    if (status === "completed") {
+      const offlineWaiters = [];
+
+      waiters.forEach((u) => {
+        const uid = u._id.toString();
+        if (onlineUsers.has(uid)) {
+          io.to(onlineUsers.get(uid)).emit("orderReady", msg);
+        } else {
+          offlineWaiters.push(uid);
+        }
+      });
+
+      if (offlineWaiters.length) {
+        await sendNotification({
+          userIds: offlineWaiters,
+          title: "Order Ready",
+          body: msg,
+          data: { orderId: order._id.toString(), status },
+        });
+      }
+
+      // Chef socket
+      chefs.forEach((u) => {
+        const uid = u._id.toString();
+        if (onlineUsers.has(uid)) {
+          io.to(onlineUsers.get(uid)).emit("orderReady", msg);
+        }
       });
     }
 
-    if(order.status ==='cancelled'){
-      io.emit("orderCancelled",`${order.tableNumber} TableNumber order is cancelled right now!`)
-    }else if(order.status === 'paid'){
-      io.emit("orderPaid",`${order.tableNumber} TableNumber order is  paid!`)
-    }else{
-io.emit("orderReady",`${order.tableNumber} TableNumber order is ready!`)
+    /* =========================
+       ORDER CANCELLED
+       ========================= */
+    if (status === "cancelled") {
+      const offlineUsers = [];
+
+      [...waiters, ...accountants].forEach((u) => {
+        const uid = u._id.toString();
+        if (onlineUsers.has(uid)) {
+          io.to(onlineUsers.get(uid)).emit("orderCancelled", msg);
+        } else {
+          offlineUsers.push(uid);
+        }
+      });
+
+      if (offlineUsers.length) {
+        await sendNotification({
+          userIds: offlineUsers,
+          title: "Order Cancelled",
+          body: msg,
+          data: { orderId: order._id.toString(), status },
+        });
+      }
+
+      // Chef socket
+      chefs.forEach((u) => {
+        const uid = u._id.toString();
+        if (onlineUsers.has(uid)) {
+          io.to(onlineUsers.get(uid)).emit("orderCancelled", msg);
+        }
+      });
+    }
+
+    /* =========================
+       ORDER PAID
+       ========================= */
+    if (status === "paid") {
+      io.emit("orderPaid", msg); // Chef, Waiter, Accountant sabai
     }
 
     res.status(200).json({
       message: "Order status updated successfully",
       order,
     });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      message: "Server error",
-      error: error.message,
-    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 };
+
+
 
 
 

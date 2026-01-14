@@ -3,6 +3,7 @@ import { Loader2, User, Lock } from "lucide-react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
+import { registerPushToken } from "../../utils/pushNotification";
 
 export default function Login() {
   const BASE_URL = import.meta.env.VITE_BASE_URL;
@@ -47,8 +48,14 @@ export default function Login() {
       localStorage.setItem("token", token);
       localStorage.setItem("role", user.role);
       localStorage.setItem("username", user.name);
-
+      const userId = user.id.toString(); // convert to string
+      localStorage.setItem("userid", userId);
       setUser(user);
+      // Try registering for push notifications (will request permission)
+      registerPushToken().then((r) => {
+        if (r.ok) console.log("Push token registered");
+        else console.log("Push registration:", r.message || r);
+      });
       toast.success(`Login success as ${user.role}`);
 
       // Redirect based on role
@@ -70,7 +77,9 @@ export default function Login() {
         <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#e9e2d8] flex items-center justify-center mx-auto text-2xl">
           🍃
         </div>
-        <h1 className="text-3xl sm:text-4xl font-serif text-[#6b3f1d] mt-3">Bamboo Cottage</h1>
+        <h1 className="text-3xl sm:text-4xl font-serif text-[#6b3f1d] mt-3">
+          Bamboo Cottage
+        </h1>
         <div className="flex justify-center gap-2 mt-4">
           <span className="w-8 sm:w-10 h-1 bg-[#d8c6a5] rounded" />
           <span className="w-16 sm:w-20 h-1 bg-[#6b3f1d] rounded" />
@@ -80,7 +89,9 @@ export default function Login() {
 
       {/* Card */}
       <div className="w-full max-w-md bg-[#efe7dc] rounded-2xl shadow-xl p-6 sm:p-8 mt-8 sm:mt-10">
-        <h2 className="text-center text-2xl sm:text-3xl font-serif text-[#6b3f1d]">Sign In</h2>
+        <h2 className="text-center text-2xl sm:text-3xl font-serif text-[#6b3f1d]">
+          Sign In
+        </h2>
 
         {error && (
           <div className="mt-4 bg-red-100 border border-red-300 text-red-700 font-bold text-sm rounded-lg px-4 py-2 text-center">
