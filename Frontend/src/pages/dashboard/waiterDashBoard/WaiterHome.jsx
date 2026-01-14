@@ -38,9 +38,6 @@ export default function WaiterHome() {
     });
     socket.on("notifications", (message) => {
       dispatch(fetchOrders());
-      notificationSound.currentTime = 0;
-      notificationSound.play().catch(() => console.log("Sound blocked"));
-      toast.success(message);
     });
     socket.on("orderReady", (message) => {
        notificationSound.currentTime = 0;
