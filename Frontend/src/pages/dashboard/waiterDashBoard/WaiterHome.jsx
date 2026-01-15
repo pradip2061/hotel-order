@@ -9,7 +9,9 @@ import { toast } from "react-toastify";
 const notificationSound = new Audio("/notification.wav");
 export default function WaiterHome() {
   const userid = localStorage.getItem("userid");
+  const token = localStorage.getItem("token");
   const dispatch = useDispatch();
+
 
   useEffect(() => {
     // Join rooms after socket connects

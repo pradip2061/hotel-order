@@ -4,13 +4,13 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-comp
 // NOTE: Service worker is a static file served from the root. You cannot use
 // `import.meta.env` here. Use the same firebase config values used in the app.
 firebase.initializeApp({
-  apiKey: "AIzaSyD77SwELcB5kAopBtQy3XkrRtHMYAwUP_s",
-  authDomain: "chiyaguff-67de9.firebaseapp.com",
-  projectId: "chiyaguff-67de9",
-  storageBucket: "chiyaguff-67de9.firebasestorage.app",
-  messagingSenderId: "657420847498",
-  appId: "1:657420847498:web:d357ac3cc5ae677c876073",
-  measurementId: "G-RLB1PB1KPX",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 });
 
 const messaging = firebase.messaging();

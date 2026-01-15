@@ -9,6 +9,7 @@ import SoundPermissionModal from "./components/common/SoundPermissionModal"; // 
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Register from "./pages/dashboard/accountantDashBoard/components/Register";
+import { generateToken } from "./firebase";
 
 /* Lazy loaded pages */
 const Login = lazy(() => import("./pages/login/Login"));
@@ -28,6 +29,10 @@ function PageLoader() {
 function AppLayout() {
   const location = useLocation();
   const hideHeaderRoutes = ["/"];
+
+  useEffect(()=>{
+    generateToken()
+  },[])
 
   // SESSION storage version
   const [soundAllowed, setSoundAllowed] = useState(false);

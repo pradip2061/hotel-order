@@ -1,55 +1,91 @@
-import axios from 'axios';
-import { getToken, deleteToken } from 'firebase/messaging';
-import { messaging } from '../firebase';
+import axios from "axios";
+import { deleteToken } from "firebase/messaging";
+import { messaging } from "../firebase";
 
 const BASE_URL = import.meta.env.VITE_BASE_URL;
-const VAPID_KEY = import.meta.env.VITE_VAPID_KEY; // optional
 
-async function requestPermission() {
-  if (!('Notification' in window)) return { granted: false, reason: 'unsupported' };
-  const permission = await Notification.requestPermission();
-  return { granted: permission === 'granted', permission };
-}
-
-export async function registerPushToken() {
+/**
+ * Register FCM token with backend
+ */
+export async function registerPushToken(fcmToken) {
   try {
-    const { granted } = await requestPermission();
-    if (!granted) return { ok: false, message: 'permission_denied' };
+    if (!fcmToken) return { ok: false, message: "no_fcm_token" };
 
-    let currentToken;
-    try {
-      if (VAPID_KEY) currentToken = await getToken(messaging, { vapidKey: VAPID_KEY });
-      else currentToken = await getToken(messaging);
-    } catch (err) {
-      return { ok: false, message: 'get_token_failed', error: err.message };
+    const authToken = localStorage.getItem("token");
+
+    // Always store locally
+    localStorage.setItem("fcm_token", fcmToken);
+
+    // Not logged in → do NOT call backend
+    if (!authToken) {
+      return { ok: true, message: "stored_locally" };
     }
 
-    if (!currentToken) return { ok: false, message: 'no_token_returned' };
+    /**
+     * Check if this token was already registered for this login session
+     * (prevents duplicate calls after refresh)
+     */
+    const registered = localStorage.getItem("fcm_registered");
 
-    const token = localStorage.getItem('token');
-    if (!token) return { ok: false, message: 'no_auth_token' };
+    if (registered === "true") {
+      return { ok: true, message: "already_registered" };
+    }
 
-    await axios.post(`${BASE_URL}/chiyaguff/notifications/register`, {}, { headers: { Authorization: token, 'x-fcm-token': currentToken } });
-    localStorage.setItem('fcm_token', currentToken);
-    return { ok: true, token: currentToken };
-  } catch (err) {
-    return { ok: false, message: err.message };
-  }
-}
+    // Register with backend
+    await axios.post(
+      `${BASE_URL}/notifications/register`,
+      { fcmToken },
+      {
+        headers: {
+          Authorization: authToken,
+        },
+      }
+    );
 
-export async function unregisterPushToken() {
-  try {
-    const currentToken = localStorage.getItem('fcm_token');
-    if (!currentToken) return { ok: false, message: 'no_token_stored' };
-    const token = localStorage.getItem('token');
-    if (!token) return { ok: false, message: 'no_auth_token' };
+    // Mark as registered for this session
+    localStorage.setItem("fcm_registered", "true");
 
-    await axios.post(`${BASE_URL}/chiyaguff/notifications/unregister`, {}, { headers: { Authorization: token, 'x-fcm-token': currentToken } });
-    try { await deleteToken(messaging); } catch (_) {}
-    localStorage.removeItem('fcm_token');
     return { ok: true };
   } catch (err) {
+    console.error("Register push token error:", err);
     return { ok: false, message: err.message };
   }
 }
 
+/**
+ * Unregister FCM token (logout)
+ */
+export async function unregisterPushToken() {
+  try {
+    const fcmToken = localStorage.getItem("fcm_token");
+    const authToken = localStorage.getItem("token");
+
+    if (!fcmToken) return { ok: false, message: "no_fcm_token" };
+    if (!authToken) return { ok: false, message: "no_auth_token" };
+
+    await axios.post(
+      `${BASE_URL}/notifications/unregister`,
+      {},
+      {
+        headers: {
+          Authorization: authToken,
+          "x-fcm-token": fcmToken,
+        },
+      }
+    );
+
+    // Delete token from Firebase
+    try {
+      await deleteToken(messaging);
+    } catch (_) {}
+
+    // Cleanup
+    localStorage.removeItem("fcm_token");
+    localStorage.removeItem("fcm_registered");
+
+    return { ok: true };
+  } catch (err) {
+    console.error("Unregister push token error:", err);
+    return { ok: false, message: err.message };
+  }
+}

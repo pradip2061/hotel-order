@@ -14,10 +14,12 @@ export default function ChefHome() {
   const navigate = useNavigate();
   const { orders, loading } = useSelector((state) => state.order);
   const userid = localStorage.getItem("userid");
+  const token = localStorage.getItem("token");
 
   useEffect(() => {
     dispatch(fetchOrders());
   }, [dispatch]);
+
 
   useEffect(() => {
     // Join rooms after socket connects

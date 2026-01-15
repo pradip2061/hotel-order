@@ -25,10 +25,10 @@ export default function Header() {
 
   const handleLogout = () => {
     setLogoutLoading(true);
-    toast.success("Logout successfully!")
     // attempt to unregister push token, then clear
     unregisterPushToken().finally(() => {
       // simulate async logout (optional)
+      toast.success("Logout successfully!")
       setTimeout(() => {
         localStorage.clear();
         setUser({ name: "", role: "" });

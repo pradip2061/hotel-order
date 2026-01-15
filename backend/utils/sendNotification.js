@@ -1,70 +1,65 @@
-const admin = require("../firebaseAdmin");
-const User = require("../model/userModel");
+import admin from "../config/firebaseAdmin.js";
+import User from "../model/userModel.js";
 
 /**
- * Send notifications to users
- * @param {Object} options
- * @param {Array<string>} [options.userIds] - MongoDB user IDs
- * @param {Array<string>} [options.tokens] - Direct FCM tokens
- * @param {string} options.title - Notification title
- * @param {string} options.body - Notification body
- * @param {Object} [options.data] - Extra payload (must be strings)
- * @param {Object} [options.io] - Socket.IO instance (optional)
+ * Send push notification to multiple users
+ * @param {string[]} userIds - array of user IDs
+ * @param {Object} payload - { title, body, data }
  */
-const sendNotification = async ({
-  userIds = [],
-  tokens = [],
-  title = "Notification",
-  body = "",
-  data = {},
-  io = null,
-}) => {
-  try {
-    const finalTokens = [...tokens]; // start with any direct tokens
+export const sendNotification = async (userIds, payload) => {
+  if (!Array.isArray(userIds) || userIds.length === 0) return;
 
-    if (Array.isArray(userIds) && userIds.length) {
-      const users = await User.find({ _id: { $in: userIds } });
+  // 1️⃣ Fetch all users in one query
+  const users = await User.find({ _id: { $in: userIds } });
 
-      for (const user of users) {
-        let skipUser = false;
+  // 2️⃣ Prepare tokens map
+  const userTokenMap = users.reduce((acc, user) => {
+    if (user.fcmTokens?.length) acc[user._id.toString()] = user.fcmTokens;
+    return acc;
+  }, {});
 
-        // Skip users if they are online (Socket.IO instance provided)
-        if (io && user._id && user.role) {
-          // optional: check if role room exists
-          const roleRoom = io.sockets.adapter.rooms.get(user.role);
-          if (roleRoom && roleRoom.size > 0) skipUser = true;
-        }
+  const allTokens = Object.values(userTokenMap).flat();
+  if (!allTokens.length) return;
 
-        // Add only offline users' FCM tokens
-        if (!skipUser && Array.isArray(user.fcmTokens)) {
-          finalTokens.push(...user.fcmTokens);
-        }
+  // 3️⃣ Create message
+  const message = {
+    notification: {
+      title: payload.title,
+      body: payload.body,
+    },
+    data: payload.data || {},
+    tokens: allTokens,
+  };
+
+  // 4️⃣ Send multicast
+  const response = await admin.messaging().sendEachForMulticast(message);
+
+  // 5️⃣ Cleanup invalid tokens per user
+  const newUserTokens = { ...userTokenMap };
+
+  response.responses.forEach((res, index) => {
+    const token = allTokens[index];
+    const userId = Object.keys(userTokenMap).find((uid) =>
+      userTokenMap[uid].includes(token)
+    );
+
+    if (!userId) return;
+
+    if (!res.success) {
+      const code = res.error?.code;
+      if (code === "messaging/registration-token-not-registered") {
+        // Remove invalid token
+        newUserTokens[userId] = newUserTokens[userId].filter((t) => t !== token);
       }
     }
+  });
 
-    // Remove duplicate tokens
-    const uniqueTokens = [...new Set(finalTokens)];
-
-    if (!uniqueTokens.length) return; // nothing to send
-
-    // Prepare FCM payload
-    const message = {
-      notification: { title, body },
-      data: Object.fromEntries(
-        Object.entries(data).map(([k, v]) => [k, String(v)])
-      ),
-    };
-
-    // Send FCM
-    if (uniqueTokens.length === 1) {
-      await admin.messaging().send({ token: uniqueTokens[0], ...message });
-    } else {
-      await admin.messaging().sendMulticast({ tokens: uniqueTokens, ...message });
+  // 6️⃣ Save updated tokens
+  for (const uid in newUserTokens) {
+    const user = users.find((u) => u._id.toString() === uid);
+    if (user) {
+      user.fcmTokens = newUserTokens[uid];
+      await user.save();
     }
-
-  } catch (err) {
-    console.error("sendNotification error:", err.message);
   }
 };
-
-module.exports = sendNotification;

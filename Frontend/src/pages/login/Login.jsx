@@ -51,11 +51,10 @@ export default function Login() {
       const userId = user.id.toString(); // convert to string
       localStorage.setItem("userid", userId);
       setUser(user);
-      // Try registering for push notifications (will request permission)
-      registerPushToken().then((r) => {
-        if (r.ok) console.log("Push token registered");
-        else console.log("Push registration:", r.message || r);
-      });
+      const fcmToken = localStorage.getItem("fcm_token");
+      if (fcmToken) {
+        await registerPushToken(fcmToken);
+      }
       toast.success(`Login success as ${user.role}`);
 
       // Redirect based on role

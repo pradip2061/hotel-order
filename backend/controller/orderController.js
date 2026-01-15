@@ -1,7 +1,7 @@
 
 const Order = require("../model/orderModal");
 const userModel = require("../model/userModel");
-const sendNotification = require("../utils/sendNotification");
+const {sendNotification}= require("../utils/sendNotification");
 
 // Create new order
 const createOrder = async (req, res) => {
@@ -85,16 +85,16 @@ const createOrder = async (req, res) => {
 
     // 8️⃣ Push notification (ONLY Chef & Accountant)
     if (notifyOfflineUserIds.length > 0) {
-      await sendNotification({
-        userIds: notifyOfflineUserIds,
+      await sendNotification(
+        notifyOfflineUserIds,{
         title: "New Order",
         body: `Order arrived from Table ${tableNumber}`,
         data: {
           orderId: order._id.toString(),
           type: "order",
-        },
-        io,
-      });
+        }}
+      
+    );
     }
 
     res.status(201).json({
@@ -177,8 +177,8 @@ const updateOrderStatus = async (req, res) => {
       });
 
       if (offlineWaiters.length) {
-        await sendNotification({
-          userIds: offlineWaiters,
+        await sendNotification(
+          offlineWaiters,{
           title: "Order Ready",
           body: msg,
           data: { orderId: order._id.toString(), status },
@@ -210,8 +210,7 @@ const updateOrderStatus = async (req, res) => {
       });
 
       if (offlineUsers.length) {
-        await sendNotification({
-          userIds: offlineUsers,
+        await sendNotification(offlineUsers,{
           title: "Order Cancelled",
           body: msg,
           data: { orderId: order._id.toString(), status },
