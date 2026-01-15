@@ -18,7 +18,7 @@ const app = express();
 // Middlewares
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: "https://hotel-order-ve5c.vercel.app",
     credentials: true,
   })
 );
@@ -37,7 +37,7 @@ const server = http.createServer(app);
 // Socket.IO setup
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: "https://hotel-order-ve5c.vercel.app",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
   },
 });
