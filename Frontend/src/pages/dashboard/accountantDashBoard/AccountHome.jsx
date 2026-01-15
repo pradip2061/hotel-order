@@ -13,7 +13,7 @@ const notificationSound = new Audio("/notification.wav");
 export default function AccountHome() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { orders } = useSelector((state) => state.order);
+  const { orders,loading } = useSelector((state) => state.order);
 
   const [activeTab, setActiveTab] = useState("pending");
   const [loadingId, setLoadingId] = useState(null);
@@ -38,7 +38,10 @@ export default function AccountHome() {
     notificationSound.play().catch(() => {});
     toast.success(message);
   };
-  const handleRefreshOrders = () => dispatch(fetchOrders());
+  const handleRefreshOrders = () => {
+    dispatch(fetchOrders());
+    setLoadingId(null);
+  }
 
   const handleOrderCancelled = (message) => {
     dispatch(fetchOrders());
@@ -113,8 +116,6 @@ export default function AccountHome() {
       if (res.status === 200) toast.success(res.data.message);
     } catch (error) {
       toast.error(error.message || "Failed to update order");
-    } finally {
-      setLoadingId(null);
     }
   };
 
@@ -196,8 +197,26 @@ export default function AccountHome() {
 
         {/* Orders */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {displayOrders.map((order) => (
-            <div
+  {loading ? (
+    // Show 3 placeholder cards
+    Array.from({ length: 3 }).map((_, index) => (
+      <div
+        key={index}
+        className="bg-gradient-to-br from-[#f7e4c7] to-[#d6b38a] rounded-xl p-4 shadow-md border border-[#c7a475] flex flex-col justify-between space-y-2 animate-pulse"
+      >
+        <div className="h-4 bg-gray-300 rounded w-1/2"></div>
+        <div className="h-3 bg-gray-200 rounded w-full mt-2"></div>
+        <div className="h-3 bg-gray-200 rounded w-3/4 mt-1"></div>
+        <div className="h-6 bg-gray-300 rounded mt-2"></div>
+      </div>
+    ))
+  ) : displayOrders.length === 0 ? (
+    <p className="text-center text-gray-500 col-span-full">
+      No orders found
+    </p>
+  ) : (
+    displayOrders.map((order) => (
+     <div
               key={order._id}
               className="bg-gradient-to-br from-[#f7e4c7] to-[#d6b38a] rounded-xl p-4 shadow-md border border-[#c7a475] flex flex-col justify-between space-y-2 text-[#3e2e1c]"
             >
@@ -252,8 +271,10 @@ export default function AccountHome() {
                 </button>
               )}
             </div>
-          ))}
-        </div>
+    ))
+  )}
+</div>
+
       </main>
 
       {/* Bottom Stats */}

@@ -111,9 +111,14 @@ const orderSlice = createSlice({
         state.error = action.payload;
       })
 
+       .addCase(fetchOrders.pending, (state) => {
+        state.loading = true;
+      })
+
       // FETCH ORDERS
       .addCase(fetchOrders.fulfilled, (state, action) => {
         state.orders = action.payload.orders;
+        state.loading = false
       })
        .addCase(fetchMenuItems.fulfilled, (state, action) => {
         state.menuItems = action.payload.items;
